@@ -142,17 +142,43 @@ type SourceAudit = {
   openRisks: string[];
 };
 
+type QuizOption = {
+  id: "A" | "B" | "C" | "D";
+  text: string;
+  feedback: string;
+};
+
+type AdvancedQuizQuestion = {
+  id: string;
+  section: string;
+  ticketNumber: number;
+  kind: string;
+  difficulty: string;
+  context: string;
+  question: string;
+  options: QuizOption[];
+  correctId: QuizOption["id"];
+  hint: string;
+  explanation: string;
+  sources: string[];
+};
+
+type AdvancedQuizBank = {
+  meta: {
+    title: string;
+    version: string;
+    questionCount: number;
+    methodology: string;
+  };
+  questions: AdvancedQuizQuestion[];
+};
+
 type ProgressState = {
   ratings: Record<string, 0 | 1 | 2 | 3>;
   solvedCases: string[];
   quizCorrect: number;
   quizAnswered: number;
   studyDays: string[];
-};
-
-type QuizQuestion = {
-  ticket: Ticket;
-  options: Ticket[];
 };
 
 const STORAGE_KEY = "examarium-progress-v1";
@@ -177,8 +203,12 @@ const NAV_ITEMS: {
   { id: "quiz", label: "Проверка знаний", shortLabel: "Тест", icon: Brain },
   { id: "cases", label: "Кейсы", shortLabel: "Кейсы", icon: Puzzle },
   { id: "oral", label: "Устный ответ", shortLabel: "Ответ", icon: Mic },
-  { id: "sources", label: "Качество материалов", shortLabel: "Источники", icon: ShieldCheck },
+  { id: "sources", label: "Источники и качество", shortLabel: "Источники", icon: ShieldCheck },
 ];
+
+const MOBILE_NAV_ITEMS = NAV_ITEMS.filter(
+  (item) => item.id !== "overview" && item.id !== "sources",
+);
 
 const MODE_META: Record<Mode, { eyebrow: string; title: string; description: string }> = {
   overview: {
@@ -197,9 +227,9 @@ const MODE_META: Record<Mode, { eyebrow: string; title: string; description: str
     description: "Сначала вспомни ответ, потом открой опоры и оцени себя честно.",
   },
   quiz: {
-    eyebrow: "Быстрая самопроверка",
-    title: "Проверка знаний",
-    description: "Узнай тему по тезису и закрепи различия между соседними билетами.",
+    eyebrow: "Экспертная самопроверка",
+    title: "Сложный экзаменационный тест",
+    description: "Различай близкие теории, находи методологические ошибки и решай мини-кейсы с разбором каждого варианта.",
   },
   cases: {
     eyebrow: "35 практических ситуаций",
@@ -212,9 +242,9 @@ const MODE_META: Record<Mode, { eyebrow: string; title: string; description: str
     description: "Получай случайный билет, запускай таймер и собирай связный ответ.",
   },
   sources: {
-    eyebrow: "Прозрачность корпуса",
-    title: "Качество материалов",
-    description: "Что вошло в тренажёр, что исключено и где нужен критический контроль.",
+    eyebrow: "Научная база",
+    title: "Источники и качество корпуса",
+    description: "Какие учебники и первоисточники лежат в основе заданий, а где нужна ручная сверка.",
   },
 };
 
@@ -236,12 +266,6 @@ const SECTION_ACCENTS = [
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function rotate<T>(items: T[], amount: number) {
-  if (!items.length) return items;
-  const normalized = ((amount % items.length) + items.length) % items.length;
-  return [...items.slice(normalized), ...items.slice(0, normalized)];
 }
 
 function getRatingLabel(rating: number) {
@@ -269,20 +293,6 @@ function getStreak(studyDays: string[]) {
     date.setUTCDate(date.getUTCDate() - 1);
   }
   return streak;
-}
-
-function createQuizQuestion(ticket: Ticket, tickets: Ticket[], seed: number): QuizQuestion {
-  const sameSection = tickets.filter(
-    (candidate) => candidate.id !== ticket.id && candidate.section === ticket.section,
-  );
-  const fallback = tickets.filter((candidate) => candidate.id !== ticket.id);
-  const pool = sameSection.length >= 3 ? sameSection : fallback;
-  const distractors: Ticket[] = [];
-  for (let index = 0; index < pool.length && distractors.length < 3; index += 1) {
-    const candidate = pool[(seed * 7 + index * 5) % pool.length];
-    if (!distractors.some((item) => item.id === candidate.id)) distractors.push(candidate);
-  }
-  return { ticket, options: rotate([ticket, ...distractors], seed % 4) };
 }
 
 function markStudyDay(progress: ProgressState) {
@@ -391,7 +401,7 @@ function TrainerNavigation({
         </div>
         <div>
           <strong>70 билетов</strong>
-          <span>13 разделов · 35 кейсов</span>
+          <span>20 книг · 39 сложных заданий</span>
         </div>
       </SidebarFooter>
       <SidebarRail />
@@ -533,9 +543,9 @@ function Overview({
           </button>
           <button className="mode-card" type="button" onClick={() => onModeChange("quiz")}>
             <Brain />
-            <span>5–7 минут</span>
-            <h3>Проверка знаний</h3>
-            <p>Различай соседние темы по ключевому тезису, а не по номеру.</p>
+            <span>15–25 минут</span>
+            <h3>Экспертный тест</h3>
+            <p>Различай близкие теории, проверяй механизм и защищай лучший ответ.</p>
             <ChevronRight />
           </button>
           <button className="mode-card" type="button" onClick={() => onModeChange("oral")}>
@@ -989,49 +999,60 @@ function CardsView({
 
 function QuizView({
   data,
+  bank,
   progress,
   onAnswer,
 }: {
   data: StudyContent;
+  bank: AdvancedQuizBank;
   progress: ProgressState;
   onAnswer: (correct: boolean) => void;
 }) {
   const [section, setSection] = React.useState("all");
   const [questionIndex, setQuestionIndex] = React.useState(0);
-  const [selected, setSelected] = React.useState<string | null>(null);
+  const [selected, setSelected] = React.useState<QuizOption["id"] | null>(null);
+  const [showHint, setShowHint] = React.useState(false);
   const [sessionCorrect, setSessionCorrect] = React.useState(0);
   const [sessionAnswered, setSessionAnswered] = React.useState(0);
 
-  const ticketPool = React.useMemo(
-    () => data.tickets.filter((ticket) => section === "all" || ticket.section === section),
-    [data.tickets, section],
+  const questionPool = React.useMemo(
+    () => bank.questions.filter((question) => section === "all" || question.section === section),
+    [bank.questions, section],
   );
-  const ticket = ticketPool[questionIndex % Math.max(1, ticketPool.length)] ?? data.tickets[0];
-  const question = React.useMemo(
-    () => createQuizQuestion(ticket, data.tickets, questionIndex + ticket.number),
-    [data.tickets, questionIndex, ticket],
-  );
+  const question = questionPool[questionIndex % Math.max(1, questionPool.length)] ?? bank.questions[0];
+  if (!question) {
+    return (
+      <div className="empty-state">
+        <AlertTriangle />
+        <h2>Банк заданий пуст</h2>
+        <p>Проверь файл экспертных вопросов и обнови страницу.</p>
+      </div>
+    );
+  }
   const answered = selected !== null;
-  const selectedCorrect = selected === ticket.id;
+  const selectedCorrect = selected === question.correctId;
+  const selectedOption = question.options.find((option) => option.id === selected);
 
-  const choose = (id: string) => {
+  const choose = (id: QuizOption["id"]) => {
     if (answered) return;
     setSelected(id);
-    const correct = id === ticket.id;
+    const correct = id === question.correctId;
     setSessionAnswered((value) => value + 1);
     if (correct) setSessionCorrect((value) => value + 1);
     onAnswer(correct);
   };
 
   const next = () => {
-    setQuestionIndex((value) => (value + 1) % Math.max(1, ticketPool.length));
+    setQuestionIndex((value) => (value + 1) % Math.max(1, questionPool.length));
     setSelected(null);
+    setShowHint(false);
   };
 
   const changeSection = (value: string) => {
     setSection(value);
     setQuestionIndex(0);
     setSelected(null);
+    setShowHint(false);
     setSessionAnswered(0);
     setSessionCorrect(0);
   };
@@ -1039,9 +1060,9 @@ function QuizView({
   return (
     <section className="quiz-layout">
       <aside className="study-control-card quiz-sidebar">
-        <p className="eyebrow">Сессия</p>
+        <p className="eyebrow">Экспертная сессия</p>
         <h2>{sessionAnswered ? `${sessionCorrect}/${sessionAnswered}` : "Начинаем"}</h2>
-        <p>Выбери билет, которому соответствует фрагмент конспекта.</p>
+        <p>Один лучший ответ из четырёх правдоподобных. После выбора разбираются все альтернативы.</p>
         <Select value={section} onValueChange={changeSection}>
           <SelectTrigger className="w-full">
             <SelectValue />
@@ -1050,11 +1071,18 @@ function QuizView({
             <SelectItem value="all">Вся программа</SelectItem>
             {data.sections.map((item) => (
               <SelectItem value={item.title} key={item.id}>
-                {item.title}
+                {item.number}. {item.title}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        <div className="quiz-session-progress">
+          <div>
+            <span>Пройдено в разделе</span>
+            <strong>{Math.min(sessionAnswered, questionPool.length)}/{questionPool.length}</strong>
+          </div>
+          <Progress value={questionPool.length ? (Math.min(sessionAnswered, questionPool.length) / questionPool.length) * 100 : 0} />
+        </div>
         <div className="lifetime-score">
           <Trophy />
           <div>
@@ -1068,23 +1096,28 @@ function QuizView({
 
       <article className="quiz-card">
         <div className="quiz-card-head">
-          <span>Вопрос {sessionAnswered + (answered ? 0 : 1)}</span>
-          <Badge variant="outline">{ticket.section}</Badge>
+          <span>Задание {questionIndex + 1} из {questionPool.length}</span>
+          <div className="quiz-badges">
+            <Badge variant="outline">{question.difficulty}</Badge>
+            <Badge variant="outline">Билет {question.ticketNumber}</Badge>
+          </div>
         </div>
-        <div className="quote-mark" aria-hidden="true">
-          “
+        <div className="quiz-taxonomy">
+          <span>{question.kind}</span>
+          <span>{question.section}</span>
         </div>
-        <blockquote>{ticket.summary}</blockquote>
+        {question.context ? <p className="quiz-context">{question.context}</p> : null}
+        <h2 className="quiz-question">{question.question}</h2>
         <div className="quiz-options" role="group" aria-label="Варианты ответа">
-          {question.options.map((option, optionIndex) => {
-            const isCorrect = option.id === ticket.id;
+          {question.options.map((option) => {
+            const isCorrect = option.id === question.correctId;
             const isSelected = selected === option.id;
             const stateClass = answered
               ? isCorrect
                 ? "is-correct"
                 : isSelected
                   ? "is-wrong"
-                  : "is-muted"
+                  : "is-neutral"
               : "";
             return (
               <button
@@ -1093,29 +1126,51 @@ function QuizView({
                 className={`quiz-option ${stateClass}`}
                 onClick={() => choose(option.id)}
                 disabled={answered}
+                aria-pressed={isSelected}
               >
-                <span>{String.fromCharCode(65 + optionIndex)}</span>
-                <strong>{option.shortTitle}</strong>
+                <span>{option.id}</span>
+                <span className="quiz-option-copy">
+                  <strong>{option.text}</strong>
+                  {answered ? <small>{option.feedback}</small> : null}
+                </span>
                 {answered && isCorrect ? <CheckCircle2 /> : null}
               </button>
             );
           })}
         </div>
+        {!answered ? (
+          <div className="quiz-hint-wrap">
+            <Button variant="ghost" onClick={() => setShowHint((value) => !value)}>
+              <Info />
+              {showHint ? "Скрыть ориентир" : "Нужен ориентир"}
+            </Button>
+            {showHint ? <p>{question.hint}</p> : null}
+          </div>
+        ) : null}
         {answered ? (
-          <div className={`quiz-feedback ${selectedCorrect ? "feedback-correct" : "feedback-wrong"}`}>
-            <div>
-              {selectedCorrect ? <CheckCircle2 /> : <AlertTriangle />}
+          <div className="quiz-resolution" aria-live="polite">
+            <div className={`quiz-feedback ${selectedCorrect ? "feedback-correct" : "feedback-wrong"}`}>
               <div>
-                <strong>{selectedCorrect ? "Верно" : "Нужен ещё один заход"}</strong>
-                <p>
-                  Это билет {ticket.number}: {ticket.title}
-                </p>
+                {selectedCorrect ? <CheckCircle2 /> : <AlertTriangle />}
+                <div>
+                  <strong>{selectedCorrect ? "Точный выбор" : "Ответ требует пересборки"}</strong>
+                  <p>{selectedOption?.feedback}</p>
+                </div>
+              </div>
+              <Button onClick={next}>
+                Следующее задание
+                <ArrowRight />
+              </Button>
+            </div>
+            <div className="quiz-explanation">
+              <p className="eyebrow">Разбор</p>
+              <p>{question.explanation}</p>
+              <div className="quiz-sources" aria-label="Источники задания">
+                {question.sources.map((source) => (
+                  <span key={`${question.id}-${source}`}>{source}</span>
+                ))}
               </div>
             </div>
-            <Button onClick={next}>
-              Дальше
-              <ArrowRight />
-            </Button>
           </div>
         ) : null}
       </article>
@@ -1262,10 +1317,12 @@ function OralView({
   data,
   progress,
   onRate,
+  onOpenTicket,
 }: {
   data: StudyContent;
   progress: ProgressState;
   onRate: (ticket: Ticket, rating: 1 | 2 | 3) => void;
+  onOpenTicket: (ticket: Ticket) => void;
 }) {
   const [ticketIndex, setTicketIndex] = React.useState(0);
   const [duration, setDuration] = React.useState(180);
@@ -1314,10 +1371,16 @@ function OralView({
             <p className="eyebrow">Случайный билет</p>
             <span>{ticket.section}</span>
           </div>
-          <Button variant="outline" onClick={randomize}>
-            <Shuffle />
-            Другой билет
-          </Button>
+          <div className="oral-stage-actions">
+            <Button variant="outline" onClick={() => onOpenTicket(ticket)}>
+              <BookOpen />
+              Открыть конспект
+            </Button>
+            <Button variant="outline" onClick={randomize}>
+              <Shuffle />
+              Другой билет
+            </Button>
+          </div>
         </div>
         <div className="oral-ticket-number">{String(ticket.number).padStart(2, "0")}</div>
         <h2>{ticket.title}</h2>
@@ -1429,8 +1492,11 @@ function SourcesView({ data, audit }: { data: StudyContent; audit: SourceAudit |
       <div className="science-notice">
         <FlaskConical />
         <div>
-          <h2>Темы сверены, конспекты — нетождественны учебникам</h2>
-          <p>{data.meta.contentNotice}</p>
+          <h2>Первоисточники стали основной учебной базой</h2>
+          <p>
+            Корпус из {data.meta.ticketCount} билетов дополнен 20 книгами и хрестоматиями. Сложные задания
+            опираются на извлекаемые тексты; визуальные сканы вынесены в отдельный статус ручной проверки.
+          </p>
         </div>
       </div>
 
@@ -1449,15 +1515,15 @@ function SourcesView({ data, audit }: { data: StudyContent; audit: SourceAudit |
       <div className="source-table-wrap">
         <div className="section-heading-row">
           <div>
-            <p className="eyebrow">Происхождение корпуса</p>
-            <h2>Решения по источникам</h2>
+            <p className="eyebrow">Учебная база</p>
+            <h2>Роль каждого источника</h2>
           </div>
         </div>
         <div className="source-table" role="table" aria-label="Источники тренажёра">
           <div className="source-table-row source-table-head" role="row">
             <span role="columnheader">Файл</span>
             <span role="columnheader">Роль</span>
-            <span role="columnheader">Решение</span>
+            <span role="columnheader">Статус</span>
           </div>
           {audit.sources.map((source) => (
             <div className="source-table-row" role="row" key={source.name}>
@@ -1492,6 +1558,7 @@ function SourcesView({ data, audit }: { data: StudyContent; audit: SourceAudit |
 export default function ExamTrainer() {
   const [data, setData] = React.useState<StudyContent | null>(null);
   const [audit, setAudit] = React.useState<SourceAudit | null>(null);
+  const [quizBank, setQuizBank] = React.useState<AdvancedQuizBank | null>(null);
   const [loadError, setLoadError] = React.useState(false);
   const [mode, setMode] = React.useState<Mode>("overview");
   const progressSnapshot = React.useSyncExternalStore(
@@ -1526,11 +1593,16 @@ export default function ExamTrainer() {
         if (!response.ok) throw new Error("audit");
         return response.json() as Promise<SourceAudit>;
       }),
+      fetch("/data/advanced-quiz.json").then((response) => {
+        if (!response.ok) throw new Error("quiz");
+        return response.json() as Promise<AdvancedQuizBank>;
+      }),
     ])
-      .then(([content, sourceAudit]) => {
+      .then(([content, sourceAudit, advancedQuiz]) => {
         if (!active) return;
         setData(content);
         setAudit(sourceAudit);
+        setQuizBank(advancedQuiz);
       })
       .catch(() => {
         if (active) setLoadError(true);
@@ -1699,10 +1771,10 @@ export default function ExamTrainer() {
       <SidebarInset className="app-main">
         <div className="mobile-topbar">
           <SidebarTrigger className="mobile-menu-button" />
-          <div className="mobile-brand">
-            <span>Э</span>
-            Экзаменариум
-          </div>
+          <button type="button" className="mobile-brand" onClick={() => changeMode("overview")} aria-label="На главную">
+            <span className="mobile-brand-mark">Э</span>
+            <span className="mobile-brand-name">Экзаменариум</span>
+          </button>
           <div className="mobile-progress">{progressPercent}%</div>
         </div>
         <div className="app-content">
@@ -1726,13 +1798,22 @@ export default function ExamTrainer() {
                 <CardsView data={data} progress={progress} onRate={rateTicket} />
               ) : null}
               {mode === "quiz" ? (
-                <QuizView data={data} progress={progress} onAnswer={recordQuizAnswer} />
+                quizBank ? (
+                  <QuizView data={data} bank={quizBank} progress={progress} onAnswer={recordQuizAnswer} />
+                ) : (
+                  <LoadingScreen />
+                )
               ) : null}
               {mode === "cases" ? (
                 <CasesView data={data} progress={progress} onToggleSolved={toggleSolvedCase} />
               ) : null}
               {mode === "oral" ? (
-                <OralView data={data} progress={progress} onRate={rateTicket} />
+                <OralView
+                  data={data}
+                  progress={progress}
+                  onRate={rateTicket}
+                  onOpenTicket={setSelectedTicket}
+                />
               ) : null}
               {mode === "sources" ? <SourcesView data={data} audit={audit} /> : null}
             </>
@@ -1740,7 +1821,7 @@ export default function ExamTrainer() {
         </div>
         {data ? (
           <nav className="mobile-bottom-nav" aria-label="Основная навигация">
-            {NAV_ITEMS.slice(0, 6).map((item) => {
+            {MOBILE_NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               return (
                 <button
