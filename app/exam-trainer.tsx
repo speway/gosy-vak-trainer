@@ -8,6 +8,7 @@ import {
   Brain,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   Clock,
   FlaskConical,
@@ -1189,7 +1190,13 @@ function CasesView({
 }) {
   const [selectedNumber, setSelectedNumber] = React.useState(1);
   const selectedCase = data.cases.find((item) => item.number === selectedNumber) ?? data.cases[0];
+  const selectedIndex = data.cases.findIndex((item) => item.id === selectedCase.id);
   const solved = progress.solvedCases.includes(selectedCase.id);
+
+  const moveCase = (offset: number) => {
+    const nextCase = data.cases[selectedIndex + offset];
+    if (nextCase) setSelectedNumber(nextCase.number);
+  };
 
   return (
     <section className="cases-layout">
@@ -1218,12 +1225,23 @@ function CasesView({
       </aside>
 
       <article className="case-workspace">
-        <div className="case-mobile-select">
+        <div className="case-mobile-select" role="group" aria-label="Навигация по кейсам">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="case-step-button"
+            onClick={() => moveCase(-1)}
+            disabled={selectedIndex <= 0}
+            aria-label="Предыдущий кейс"
+          >
+            <ChevronLeft />
+          </Button>
           <Select value={String(selectedNumber)} onValueChange={(value) => setSelectedNumber(Number(value))}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="case-select-trigger" aria-label="Выбрать кейс">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent position="popper">
+            <SelectContent position="popper" align="center" className="case-select-content">
               {data.cases.map((item) => (
                 <SelectItem key={item.id} value={String(item.number)}>
                   {item.number}. {item.title}
@@ -1231,6 +1249,17 @@ function CasesView({
               ))}
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="case-step-button"
+            onClick={() => moveCase(1)}
+            disabled={selectedIndex >= data.cases.length - 1}
+            aria-label="Следующий кейс"
+          >
+            <ChevronRight />
+          </Button>
         </div>
         <div className="case-title-row">
           <div>
