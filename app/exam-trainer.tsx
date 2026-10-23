@@ -16,6 +16,7 @@ import {
   Layers,
   LayoutDashboard,
   ListChecks,
+  LogOut,
   Mic,
   Pause,
   Play,
@@ -337,10 +338,12 @@ function TrainerNavigation({
   mode,
   onModeChange,
   counts,
+  onLogout,
 }: {
   mode: Mode;
   onModeChange: (mode: Mode) => void;
   counts: { due: number; cases: number };
+  onLogout: () => void;
 }) {
   const { setOpenMobile } = useSidebar();
 
@@ -396,13 +399,30 @@ function TrainerNavigation({
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="sidebar-note">
-        <div className="sidebar-note-icon">
-          <FlaskConical />
+      <SidebarFooter>
+        <div className="sidebar-auth-row flex items-center justify-between px-3 py-1.5 text-xs text-[#8996b7] border-b border-white/5 mx-2">
+          <span className="flex items-center gap-1.5 font-medium text-white/90">
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            В сети
+          </span>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex items-center gap-1 text-[#8996b7] hover:text-white transition-colors py-1 px-2 rounded-lg hover:bg-white/10"
+            title="Выйти из системы"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Выход</span>
+          </button>
         </div>
-        <div>
-          <strong>70 билетов</strong>
-          <span>20 книг · 39 сложных заданий</span>
+        <div className="sidebar-note">
+          <div className="sidebar-note-icon">
+            <FlaskConical />
+          </div>
+          <div>
+            <strong>70 билетов</strong>
+            <span>20 книг · 39 сложных заданий</span>
+          </div>
         </div>
       </SidebarFooter>
       <SidebarRail />
@@ -1774,6 +1794,14 @@ export default function ExamTrainer() {
     : 0;
   const progressPercent = data ? Math.round((knownCount / data.tickets.length) * 100) : 0;
 
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  };
+
   if (loadError) {
     return (
       <main className="fatal-state">
@@ -1795,6 +1823,7 @@ export default function ExamTrainer() {
           mode={mode}
           onModeChange={changeMode}
           counts={{ due: dueCount, cases: data ? data.cases.length - progress.solvedCases.length : 0 }}
+          onLogout={handleLogout}
         />
       </Sidebar>
       <SidebarInset className="app-main">
@@ -1804,7 +1833,18 @@ export default function ExamTrainer() {
             <span className="mobile-brand-mark">Э</span>
             <span className="mobile-brand-name">Экзаменариум</span>
           </button>
-          <div className="mobile-progress">{progressPercent}%</div>
+          <div className="flex items-center gap-2">
+            <div className="mobile-progress">{progressPercent}%</div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 transition-colors"
+              title="Выйти из системы"
+              aria-label="Выйти"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div className="app-content">
           {!data ? (

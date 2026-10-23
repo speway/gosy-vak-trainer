@@ -195,6 +195,7 @@ button:disabled { cursor: default; }
 .sidebar-note strong { font-size: .78rem; }
 .sidebar-note span { margin-top: 2px; color: #8996b7; font-size: .64rem; }
 [data-collapsible="icon"] .sidebar-note > div:last-child { display: none; }
+[data-collapsible="icon"] .sidebar-auth-row { display: none; }
 .mobile-topbar, .mobile-bottom-nav { display: none; }
 
 .page-heading { display: flex; margin-bottom: 34px; align-items: flex-start; justify-content: space-between; gap: 30px; }
