@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Shuffle,
   Trophy,
+  X,
 } from "lucide-react";
 
 import {
@@ -250,22 +251,6 @@ const MODE_META: Record<Mode, { eyebrow: string; title: string; description: str
   },
 };
 
-const SECTION_ACCENTS = [
-  "#4f67ff",
-  "#ff6b57",
-  "#20a4a5",
-  "#a461e8",
-  "#e79b21",
-  "#3185fc",
-  "#d94c7d",
-  "#64748b",
-  "#00a6a6",
-  "#7c5cff",
-  "#e55c45",
-  "#4b8f63",
-  "#c57a18",
-];
-
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -456,10 +441,6 @@ function PageHeading({ mode }: { mode: Mode }) {
         <h1>{meta.title}</h1>
         <p>{meta.description}</p>
       </div>
-      <div className="heading-seal" aria-hidden="true">
-        <span>{mode === "overview" ? "70" : NAV_ITEMS.findIndex((item) => item.id === mode) + 1}</span>
-        <small>{mode === "overview" ? "билетов" : "режим"}</small>
-      </div>
     </header>
   );
 }
@@ -493,96 +474,115 @@ function Overview({
 
   return (
     <div className="overview-stack">
-      <section className="overview-hero">
-        <div className="today-card">
-          <div className="today-copy">
-            <div className="mode-chip">
-              <Clock />
-              Следующий билет · {nextTicket.estimatedMinutes} мин
-            </div>
-            <p className="ticket-kicker">
-              Билет {String(nextTicket.number).padStart(2, "0")} · {nextTicket.section}
-            </p>
-            <h2>{nextTicket.shortTitle}</h2>
-            <p className="today-summary">{nextTicket.summary}</p>
-            <div className="hero-actions">
-              <Button className="action-primary" onClick={() => onOpenTicket(nextTicket)}>
-                Открыть билет
-                <ArrowRight />
-              </Button>
-              <Button variant="outline" className="action-quiet" onClick={() => onModeChange("cards")}>
-                Учить карточками
-              </Button>
-            </div>
+      {/* 1. Next Recommended Ticket Hero Card */}
+      <section className="today-card">
+        <div className="today-copy">
+          <div className="mode-chip">
+            <Clock />
+            <span>Рекомендован к изучению · ≈ {nextTicket.estimatedMinutes} мин</span>
           </div>
-          <div className="progress-orbit" style={{ "--progress": `${percentage * 3.6}deg` } as React.CSSProperties}>
-            <div>
-              <strong>{percentage}%</strong>
-              <span>освоено</span>
-            </div>
+          <p className="ticket-kicker">
+            Билет {String(nextTicket.number).padStart(2, "0")} · {nextTicket.section}
+          </p>
+          <h2>{nextTicket.shortTitle || nextTicket.title}</h2>
+          <p className="today-summary">{nextTicket.summary}</p>
+          <div className="hero-actions">
+            <Button className="action-primary" onClick={() => onOpenTicket(nextTicket)}>
+              Открыть билет
+              <ArrowRight />
+            </Button>
+            <Button variant="outline" className="action-quiet" onClick={() => onModeChange("cards")}>
+              Учить карточками
+            </Button>
           </div>
         </div>
-
-        <div className="metrics-column">
-          <article className="metric-card metric-cobalt">
-            <span>Знаю</span>
-            <strong>{known}</strong>
-            <small>из {data.tickets.length} билетов</small>
-          </article>
-          <article className="metric-card metric-coral">
-            <span>В работе</span>
-            <strong>{learning}</strong>
-            <small>нуждаются в повторении</small>
-          </article>
-          <article className="metric-card metric-ink">
-            <span>Точность</span>
-            <strong>{quizAccuracy}%</strong>
-            <small>{progress.quizAnswered || "нет"} ответов в тесте</small>
-          </article>
-          <article className="metric-card metric-sun">
-            <span>Серия</span>
-            <strong>{streak}</strong>
-            <small>{streak === 1 ? "день" : "дней"} подряд</small>
-          </article>
+        <div className="today-progress-side">
+          <div className="overall-progress-box">
+            <span className="overall-label">Общий прогресс</span>
+            <strong className="overall-value">{percentage}%</strong>
+            <span className="overall-subtext">{known} из {data.tickets.length} билетов</span>
+            <Progress value={percentage} className="overall-progress-bar" />
+          </div>
         </div>
       </section>
 
+      {/* 2. Key Metrics Row */}
+      <section className="metrics-row" aria-label="Статистика подготовки">
+        <article className="metric-box">
+          <div className="metric-box-top">
+            <span className="metric-box-title">Освоено</span>
+            <span className="metric-box-tag tag-known">Знаю</span>
+          </div>
+          <strong className="metric-box-num">{known}</strong>
+          <span className="metric-box-desc">из {data.tickets.length} билетов ({percentage}%)</span>
+        </article>
+
+        <article className="metric-box">
+          <div className="metric-box-top">
+            <span className="metric-box-title">В работе</span>
+            <span className="metric-box-tag tag-learning">Повторить</span>
+          </div>
+          <strong className="metric-box-num">{learning}</strong>
+          <span className="metric-box-desc">требуют закрепления</span>
+        </article>
+
+        <article className="metric-box">
+          <div className="metric-box-top">
+            <span className="metric-box-title">Тестирование</span>
+            <span className="metric-box-tag tag-test">Тест</span>
+          </div>
+          <strong className="metric-box-num">{quizAccuracy}%</strong>
+          <span className="metric-box-desc">{progress.quizAnswered ? `${progress.quizCorrect} из ${progress.quizAnswered} верно` : "ещё нет ответов"}</span>
+        </article>
+
+        <article className="metric-box">
+          <div className="metric-box-top">
+            <span className="metric-box-title">Регулярность</span>
+            <span className="metric-box-tag tag-streak">Серия</span>
+          </div>
+          <strong className="metric-box-num">{streak}</strong>
+          <span className="metric-box-desc">{streak === 1 ? "день занятий" : streak >= 2 && streak <= 4 ? "дня подряд" : "дней подряд"}</span>
+        </article>
+      </section>
+
+      {/* 3. Study Modes */}
       <section className="quick-modes" aria-labelledby="quick-modes-title">
         <div className="section-heading-row">
           <div>
-            <p className="eyebrow">Выбери нагрузку</p>
-            <h2 id="quick-modes-title">Три способа не просто перечитать</h2>
+            <p className="eyebrow">Форматы подготовки</p>
+            <h2 id="quick-modes-title">Режимы тренировки</h2>
           </div>
         </div>
         <div className="mode-cards">
           <button className="mode-card" type="button" onClick={() => onModeChange("cards")}>
-            <Layers />
-            <span>10–15 минут</span>
+            <div className="mode-card-icon icon-cards"><Layers /></div>
+            <span className="mode-card-time">10–15 минут</span>
             <h3>Карточки</h3>
-            <p>Воспроизведи структуру ответа до подсказки и оцени сложность.</p>
-            <ChevronRight />
+            <p>Вспомните ключевые тезисы до открытия опоры и оцените уверенность ответа.</p>
+            <ChevronRight className="mode-card-arrow" />
           </button>
           <button className="mode-card" type="button" onClick={() => onModeChange("quiz")}>
-            <Brain />
-            <span>15–25 минут</span>
+            <div className="mode-card-icon icon-quiz"><Brain /></div>
+            <span className="mode-card-time">15–25 минут</span>
             <h3>Экспертный тест</h3>
-            <p>Различай близкие теории, проверяй механизм и защищай лучший ответ.</p>
-            <ChevronRight />
+            <p>Тренируйтесь различать близкие теории, находить методологические ошибки и обосновывать выбор.</p>
+            <ChevronRight className="mode-card-arrow" />
           </button>
           <button className="mode-card" type="button" onClick={() => onModeChange("oral")}>
-            <Mic />
-            <span>3–5 минут</span>
+            <div className="mode-card-icon icon-oral"><Mic /></div>
+            <span className="mode-card-time">3–5 минут</span>
             <h3>Устный ответ</h3>
-            <p>Репетируй связный ответ с таймером и чек-листом комиссии.</p>
-            <ChevronRight />
+            <p>Репетиция связного ответа с таймером перед виртуальной экзаменационной комиссией.</p>
+            <ChevronRight className="mode-card-arrow" />
           </button>
         </div>
       </section>
 
+      {/* 4. Sections Map */}
       <section className="section-map" aria-labelledby="section-map-title">
         <div className="section-heading-row">
           <div>
-            <p className="eyebrow">Карта программы</p>
+            <p className="eyebrow">Программа экзамена</p>
             <h2 id="section-map-title">13 разделов</h2>
           </div>
           <Button variant="ghost" onClick={() => onModeChange("tickets")}>
@@ -591,7 +591,7 @@ function Overview({
           </Button>
         </div>
         <div className="section-grid">
-          {data.sections.map((section, index) => {
+          {data.sections.map((section) => {
             const sectionTickets = data.tickets.filter((ticket) => ticket.section === section.title);
             const sectionKnown = sectionTickets.filter((ticket) => progress.ratings[ticket.id] === 3).length;
             const value = Math.round((sectionKnown / sectionTickets.length) * 100);
@@ -601,16 +601,15 @@ function Overview({
                 className="section-card"
                 key={section.id}
                 onClick={() => onModeChange("tickets")}
-                style={{ "--section-accent": SECTION_ACCENTS[index] } as React.CSSProperties}
               >
                 <span className="section-number">{String(section.number).padStart(2, "0")}</span>
-                <div>
+                <div className="section-card-body">
                   <h3>{section.title}</h3>
                   <p>
-                    Билеты {section.ticketRange[0]}–{section.ticketRange[1]} · {sectionKnown}/{section.ticketCount}
+                    Билеты {section.ticketRange[0]}–{section.ticketRange[1]} · {sectionKnown}/{section.ticketCount} освоено
                   </p>
+                  <Progress value={value} aria-label={`Прогресс раздела ${value}%`} className="section-progress-bar" />
                 </div>
-                <Progress value={value} aria-label={`Прогресс раздела ${value}%`} />
               </button>
             );
           })}
@@ -704,16 +703,28 @@ function TicketDialog({
           </Tabs>
         </div>
         <div className="ticket-dialog-footer">
-          <span>Как ощущается билет сейчас?</span>
-          <div>
-            <Button variant={rating === 1 ? "default" : "outline"} onClick={() => onRate(1)}>
+          <span>Оцените готовность по этому билету:</span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={rating === 1 ? "default" : "outline"}
+              className={rating === 1 ? "bg-rose-600 hover:bg-rose-700 text-white border-rose-600" : "hover:border-rose-400 hover:text-rose-700"}
+              onClick={() => onRate(1)}
+            >
               Трудно
             </Button>
-            <Button variant={rating === 2 ? "default" : "outline"} onClick={() => onRate(2)}>
+            <Button
+              variant={rating === 2 ? "default" : "outline"}
+              className={rating === 2 ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600" : "hover:border-amber-400 hover:text-amber-700"}
+              onClick={() => onRate(2)}
+            >
               Повторить
             </Button>
-            <Button className="know-button" variant={rating === 3 ? "default" : "outline"} onClick={() => onRate(3)}>
-              <Check />
+            <Button
+              variant={rating === 3 ? "default" : "outline"}
+              className={rating === 3 ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600" : "hover:border-emerald-400 hover:text-emerald-700"}
+              onClick={() => onRate(3)}
+            >
+              <Check className="w-4 h-4 mr-1" />
               Знаю
             </Button>
           </div>
@@ -766,16 +777,26 @@ function TicketsView({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Номер, тема или ключевое слово"
+            placeholder="Поиск по номеру, теме или авторам..."
             aria-label="Поиск по билетам"
           />
+          {query ? (
+            <button
+              type="button"
+              className="search-clear-button"
+              onClick={() => setQuery("")}
+              aria-label="Очистить поиск"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          ) : null}
         </div>
         <Select value={section} onValueChange={setSection}>
           <SelectTrigger className="filter-select">
             <SelectValue placeholder="Все разделы" />
           </SelectTrigger>
           <SelectContent position="popper">
-            <SelectItem value="all">Все разделы</SelectItem>
+            <SelectItem value="all">Все 13 разделов</SelectItem>
             {data.sections.map((item) => (
               <SelectItem key={item.id} value={item.title}>
                 {item.number}. {item.title}
@@ -788,41 +809,34 @@ function TicketsView({
             <SelectValue placeholder="Любой статус" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Любой статус</SelectItem>
+            <SelectItem value="all">Все статусы</SelectItem>
             <SelectItem value="new">Не начато</SelectItem>
-            <SelectItem value="learning">В работе</SelectItem>
-            <SelectItem value="known">Знаю</SelectItem>
+            <SelectItem value="learning">В работе (повторить)</SelectItem>
+            <SelectItem value="known">Знаю (освоено)</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div className="result-line">
-        <span>{filtered.length} билетов</span>
-        <span>Нажми на билет, чтобы открыть каркас и конспект</span>
+        <span>Найдено: {filtered.length} билетов</span>
+        <span>Нажмите на билет для просмотра каркаса и конспекта</span>
       </div>
 
       {filtered.length ? (
         <div className="ticket-list">
           {filtered.map((ticket) => {
             const rating = progress.ratings[ticket.id] ?? 0;
-            const sectionIndex = data.sections.findIndex((item) => item.title === ticket.section);
             return (
               <button
                 type="button"
                 key={ticket.id}
                 className="ticket-row"
                 onClick={() => onOpenTicket(ticket)}
-                style={{ "--ticket-accent": SECTION_ACCENTS[sectionIndex] } as React.CSSProperties}
               >
                 <span className="ticket-row-number">{String(ticket.number).padStart(2, "0")}</span>
                 <span className="ticket-row-content">
                   <small>{ticket.section}</small>
                   <strong>{ticket.title}</strong>
-                  <span className="ticket-row-keywords">
-                    {ticket.keywords.slice(0, 4).map((keyword) => (
-                      <em key={`${ticket.id}-${keyword}`}>{keyword}</em>
-                    ))}
-                  </span>
                 </span>
                 <span className="ticket-row-meta">
                   <span className={`status-pill ${getRatingClass(rating)}`}>{getRatingLabel(rating)}</span>
@@ -965,7 +979,7 @@ function CardsView({
               <h2>{ticket.title}</h2>
               <div className="recall-prompt">
                 <Brain />
-                <span>Назови определение, 3–5 ключевых тезисов, авторов и один пример.</span>
+                <span>Вспомните: определение, авторов концепции, 3–5 ключевых тезисов и практический пример.</span>
               </div>
             </div>
           ) : (
@@ -984,7 +998,7 @@ function CardsView({
           <div className="flashcard-footer">
             {!revealed ? (
               <Button className="action-primary" onClick={() => setRevealed(true)}>
-                Показать опоры
+                Показать ответ (Пробел)
               </Button>
             ) : (
               <div className="rating-buttons">
